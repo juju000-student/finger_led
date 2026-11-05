@@ -1,4 +1,4 @@
-[README.md](https://github.com/user-attachments/files/34428560/README.md)
+
 # 손가락 슬라이더로 LED 밝기 조절 (p5.js + ml5 + Arduino)
 
 202601527김주영
