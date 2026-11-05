@@ -24,12 +24,16 @@
 | 슬라이더 값을 아두이노로 전송 | `sketch.js`의 `sendBrightness()`에서 슬라이더 값을 0~255로 변환해 `"값\n"` 형식으로 전송 |
 | 아두이노에 연결된 LED 밝기 조절 | `finger_led_pwm.ino`에서 받은 값을 `analogWrite(9, 값)`으로 출력 |
 
-## 준비물
+## 동작영상과 Fritzing 회로 사진
 
-- Arduino Uno R3, USB 케이블
-- LED 1개, 220Ω 저항 1개, 브레드보드, 점퍼선
-- 웹캠
-- Chrome 또는 Edge 브라우저 (Web Serial API 지원)
+https://github.com/user-attachments/assets/92d5e6c0-7e05-4297-9647-14cf0bd39645
+
+<img width="1767" height="702" alt="PotButtonLCD (1)_bb" src="https://github.com/user-attachments/assets/a0c10744-bfa5-4f73-a4c1-f8834116e308" />
+
+
+
+
+
 
 ## 회로
 
