@@ -1,11 +1,7 @@
 [README.md](https://github.com/user-attachments/files/34428560/README.md)
 # 손가락 슬라이더로 LED 밝기 조절 (p5.js + ml5 + Arduino)
 
-창의설계입문 9주차 미션: p5를 아두이노의 GUI로 활용하기
-
-- 작성자: (이름 / 학번)
-- p5 Web Editor 스케치: (링크)
-- 시연 영상: (링크)
+202601527김주영
 
 ## 개요
 
