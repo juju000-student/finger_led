@@ -45,13 +45,216 @@ https://github.com/user-attachments/assets/92d5e6c0-7e05-4297-9647-14cf0bd39645
 D9를 사용하는 이유는 `~` 표시가 있는 PWM 핀이어야 `analogWrite()`로 밝기를 단계적으로 조절할 수 있기 때문입니다.
 저항을 연결하는 이유는 LED에 전류가 너무 많이 흘러 LED나 핀이 손상되는 것을 막기 위해서입니다.
 
-## 파일 구성
+## 전체 코드
 
+### finger_led_pwm/finger_led_pwm.ino
+
+```cpp
+const int LED_PIN = 9;
+
+void setup() {
+  pinMode(LED_PIN, OUTPUT);
+  Serial.begin(9600);
+}
+
+void loop() {
+  if (Serial.available() > 0) {
+    String data = Serial.readStringUntil('\n');
+    data.trim();
+
+    if (data.length() > 0) {
+      int brightness = constrain(data.toInt(), 0, 255);
+      analogWrite(LED_PIN, brightness);
+    }
+  }
+}
 ```
-├── index.html                     p5.js 2.3.4, ml5.js v1, sketch.js 불러오기
-├── sketch.js                      손 인식, 슬라이더, Web Serial 전송
-└── finger_led_pwm/
-    └── finger_led_pwm.ino         시리얼 값 수신 후 PWM 출력
+
+### index.html
+
+```html
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <script src="https://cdn.jsdelivr.net/npm/p5@2.3.4/lib/p5.js"></script>
+  <script src="https://unpkg.com/ml5@1/dist/ml5.min.js"></script>
+</head>
+<body>
+  <script src="sketch.js"></script>
+</body>
+</html>
+```
+
+### sketch.js
+
+```javascript
+let video, handPose;
+let hands = [];
+let connections = [];
+let slider, connectButton;
+
+let port, writer;
+let connected = false;
+let sending = false;
+let lastSent = -1;
+let sliderValue = 50;
+let statusText = "Arduino를 연결해 주세요.";
+
+async function setup() {
+  createCanvas(640, 480);
+
+  slider = createSlider(0, 100, 50, 1);
+  slider.style('writing-mode', 'vertical-rl');
+  slider.style('height', '440px');
+  slider.style('transform', 'rotate(180deg)');
+  slider.position(10, 20);
+  slider.input(() => {
+    sliderValue = Number(slider.value());
+  });
+
+  connectButton = createButton("Arduino 연결 / 해제");
+  connectButton.position(20, 500);
+  connectButton.mousePressed(connectArduino);
+
+  video = createCapture(VIDEO, { flipped: true });
+  video.size(640, 480);
+  video.hide();
+
+  handPose = await ml5.handPose({ flipped: true });
+  connections = handPose.getConnections();
+  handPose.detectStart(video, gotHands);
+}
+
+function draw() {
+  background(20);
+  image(video, 0, 0, width, height);
+
+  for (let hand of hands) {
+    stroke(0, 255, 0);
+    strokeWeight(2);
+
+    for (let [a, b] of connections) {
+      let p1 = hand.keypoints[a];
+      let p2 = hand.keypoints[b];
+      line(p1.x, p1.y, p2.x, p2.y);
+    }
+
+    noStroke();
+    fill(255, 0, 0);
+
+    for (let p of hand.keypoints) {
+      circle(p.x, p.y, 10);
+    }
+  }
+
+  if (hands.length > 0) {
+    let points = hands[0].keypoints;
+
+    let thumb = points[4];
+    let index = points[8];
+    let wrist = points[0];
+    let palm = points[9];
+
+    stroke(255, 140, 0);
+    strokeWeight(4);
+    line(thumb.x, thumb.y, index.x, index.y);
+
+    let fingerDist = dist(
+      thumb.x, thumb.y, index.x, index.y
+    );
+
+    let palmDist = dist(
+      wrist.x, wrist.y, palm.x, palm.y
+    );
+
+    if (palmDist > 0) {
+      let value = constrain(
+        100 * fingerDist / palmDist - 15, 0, 100
+      );
+
+      sliderValue += 0.2 * (value - sliderValue);
+      slider.value(round(sliderValue));
+    }
+  }
+
+  sendBrightness();
+
+  noStroke();
+  fill(0, 170);
+  rect(50, 430, 570, 40, 8);
+
+  fill(255);
+  textSize(16);
+  text(
+    "밝기: " + round(map(slider.value(), 0, 100, 0, 255))
+    + " / 255  |  " + statusText,
+    60, 455
+  );
+}
+
+function gotHands(results) {
+  hands = results;
+}
+
+async function connectArduino() {
+  try {
+    if (port) {
+      if (sending) return;
+
+      connected = false;
+      writer.releaseLock();
+      writer = null;
+      await port.close();
+      port = null;
+      statusText = "연결 해제됨";
+      return;
+    }
+
+    if (!("serial" in navigator)) {
+      statusText = "Web Serial을 지원하지 않습니다.";
+      return;
+    }
+
+    port = await navigator.serial.requestPort();
+    await port.open({ baudRate: 9600 });
+    writer = port.writable.getWriter();
+
+    statusText = "Arduino 연결 중...";
+
+    await new Promise(resolve => setTimeout(resolve, 2000));
+
+    lastSent = -1;
+    connected = true;
+    statusText = "연결됨";
+  } catch (error) {
+    statusText = "연결 오류: " + error.message;
+  }
+}
+
+async function sendBrightness() {
+  if (!connected || sending) return;
+
+  let brightness = round(
+    map(Number(slider.value()), 0, 100, 0, 255)
+  );
+
+  if (brightness === lastSent) return;
+
+  sending = true;
+
+  try {
+    await writer.write(
+      new TextEncoder().encode(brightness + "\n")
+    );
+
+    lastSent = brightness;
+  } catch (error) {
+    statusText = "전송 오류: " + error.message;
+  } finally {
+    sending = false;
+  }
+}
 ```
 
 
@@ -111,23 +314,3 @@ analogWrite(LED_PIN, brightness);
 - `constrain()`으로 0~255 범위를 보장한 다음 `analogWrite()`로 PWM 듀티비를 바꿉니다.
   PWM은 핀을 아주 빠르게 켜고 끄며 켜져 있는 시간의 비율을 바꾸는 방식이라서, 듀티비가 클수록 LED가 더 밝게 보입니다.
 
-## Arduino IDE 코드
-
-const int LED_PIN = 9;
-
-void setup() {
-  pinMode(LED_PIN, OUTPUT);
-  Serial.begin(9600);
-}
-
-void loop() {
-  if (Serial.available() > 0) {
-    String data = Serial.readStringUntil('\n');
-    data.trim();
-
-    if (data.length() > 0) {
-      int brightness = constrain(data.toInt(), 0, 255);
-      analogWrite(LED_PIN, brightness);
-    }
-  }
-}
